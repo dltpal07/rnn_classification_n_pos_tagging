@@ -58,6 +58,12 @@ class BidirectionalRNN(nn.Module):
         self.num_layers = 3
         self.hidden_size = 512
 
+        self.layer_norm0 = torch.nn.LayerNorm(self.hidden_size)
+        self.layer_norm1 = torch.nn.LayerNorm(self.hidden_size)
+        self.layer_norm2 = torch.nn.LayerNorm(self.hidden_size)
+
+        self.drop_out = nn.Dropout2d()
+
         self.wx0_l2r = self.make_layer(self.hidden_size, self.hidden_size)
         self.wh0_l2r = self.make_layer(self.hidden_size, self.hidden_size)
         self.b0_l2r = nn.Parameter(torch.zeros(self.hidden_size))
@@ -105,9 +111,9 @@ class BidirectionalRNN(nn.Module):
         for i in range(max_length):
             v_t_l2r = x_l2r[:,i,:]
             v_t_l2r = torch.squeeze(v_t_l2r, 1)
-            h_t_0_l2r = self.tanh(torch.matmul(v_t_l2r, self.wx0_l2r) + torch.matmul(h_t_0_l2r, self.wh0_l2r) + self.b0_l2r)
-            h_t_1_l2r = self.tanh(torch.matmul(h_t_0_l2r, self.wx1_l2r) + torch.matmul(h_t_1_l2r, self.wh1_l2r) + self.b1_l2r)
-            h_t_2_l2r = self.tanh(torch.matmul(h_t_1_l2r, self.wx2_l2r) + torch.matmul(h_t_2_l2r, self.wh2_l2r) + self.b2_l2r)
+            h_t_0_l2r = self.drop_out(self.tanh(self.layer_norm0(torch.matmul(v_t_l2r, self.wx0_l2r) + torch.matmul(h_t_0_l2r, self.wh0_l2r) + self.b0_l2r)))
+            h_t_1_l2r = self.drop_out(self.tanh(self.layer_norm1(torch.matmul(h_t_0_l2r, self.wx1_l2r) + torch.matmul(h_t_1_l2r, self.wh1_l2r) + self.b1_l2r)))
+            h_t_2_l2r = self.drop_out(self.tanh(self.layer_norm2(torch.matmul(h_t_1_l2r, self.wx2_l2r) + torch.matmul(h_t_2_l2r, self.wh2_l2r) + self.b2_l2r)))
             unsqueeze_h_t_2_l2r = torch.unsqueeze(h_t_2_l2r, 1)
             if len(out_l2r) == 0:
                 out_l2r = unsqueeze_h_t_2_l2r
@@ -117,12 +123,12 @@ class BidirectionalRNN(nn.Module):
         for i in range(max_length):
             v_t_r2l = x_r2l[:, i, :]
             v_t_r2l = torch.squeeze(v_t_r2l, 1)
-            h_t_0_r2l = self.tanh(
-                torch.matmul(v_t_r2l, self.wx0_r2l) + torch.matmul(h_t_0_r2l, self.wh0_r2l) + self.b0_r2l)
-            h_t_1_r2l = self.tanh(
-                torch.matmul(h_t_0_r2l, self.wx1_r2l) + torch.matmul(h_t_1_r2l, self.wh1_r2l) + self.b1_r2l)
-            h_t_2_r2l = self.tanh(
-                torch.matmul(h_t_1_r2l, self.wx2_r2l) + torch.matmul(h_t_2_r2l, self.wh2_r2l) + self.b2_r2l)
+            h_t_0_r2l = self.drop_out(self.tanh(
+                self.layer_norm0(torch.matmul(v_t_r2l, self.wx0_r2l) + torch.matmul(h_t_0_r2l, self.wh0_r2l) + self.b0_r2l)))
+            h_t_1_r2l = self.drop_out(self.tanh(
+                self.layer_norm1(torch.matmul(h_t_0_r2l, self.wx1_r2l) + torch.matmul(h_t_1_r2l, self.wh1_r2l) + self.b1_r2l)))
+            h_t_2_r2l = self.drop_out(self.tanh(
+                self.layer_norm2(torch.matmul(h_t_1_r2l, self.wx2_r2l) + torch.matmul(h_t_2_r2l, self.wh2_r2l) + self.b2_r2l)))
             unsqueeze_h_t_2_r2l = torch.unsqueeze(h_t_2_r2l, 1)
             if len(out_r2l) == 0:
                 out_r2l = unsqueeze_h_t_2_r2l

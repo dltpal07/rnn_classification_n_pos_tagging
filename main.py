@@ -8,7 +8,7 @@ import argparse
 import torch.optim as optim
 import os
 import csv
-
+import torch.nn.functional as F
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu-num', default=3, type=int)
 parser.add_argument('--task', default='classification', type=str, choices=['classification', 'pos'])
@@ -90,7 +90,7 @@ def output2csv(pred_y, file_name='classification_class.pred.csv'):
             y_id = str(i)
             # if len(y_id) < 3:
             #     y_id = '0' * (3 - len(y_id)) + y_id
-            writer.writerow(['S' + y_id, p[0].item()])
+            writer.writerow(['S' + y_id, p.item()])
     print('file saved.')
 
 
@@ -100,7 +100,7 @@ def classification_train(train_x, train_y, epoch):
     correct = 0
     net.train()
 
-    optimizer = optim.Adam(net.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = optim.Adam(net.parameters(), lr=1e-2, weight_decay=1e-4)
     batch_size = 256
     iteration = (len(train_x) // batch_size) + 1
     cur_i = 0
@@ -175,10 +175,13 @@ def pos_train(train_x, reverse_train_x, pad_start_index, max_length, train_y, ep
         optimizer.zero_grad()
         output = net(data, reverse_data, pad_indexes, max_length)
         targets = targets.view(-1)
-        all_samples += len(targets)
         # set mask
-        mask = torch.where(targets == 0, False, True).unsqueeze(1).expand(-1, 18)
-        output *= mask
+        output_mask = torch.where(targets == 0, False, True).unsqueeze(1).expand(-1, 18).to(device)
+        target_mask = torch.where(targets == 0, False, True).to(device)
+
+        output = torch.masked_select(output, output_mask).view(-1, 18)
+        targets = torch.masked_select(targets, target_mask)
+        all_samples += len(targets)
         loss = criterion(output, targets)
         tr_loss += loss.item()
         loss.backward()
@@ -201,32 +204,32 @@ def pos_test(test_x, reverse_test_x, pad_start_index, max_length, targets=None):
     ts_loss = 0.
 
     with torch.no_grad():
+        data = test_x.to(device)
+        reverse_data = reverse_test_x.to(device)
+        output = net(data, reverse_data, pad_start_index, max_length)
+        masks = []
+        for p in pad_start_index:
+            mask = torch.ones([max_length], dtype=torch.bool).to(device)
+            mask[p:] = False
+            masks.append(mask)
+        masks = torch.stack(masks, dim=0)
+        print(masks[0])
+        masks = masks.view(-1)
+        pred = output.argmax(dim=1)
+        print('pred:', pred[:30])
+        selected_pred = torch.masked_select(pred, masks)
         if targets != None:
-            data = test_x.to(device)
-            reverse_data = reverse_test_x.to(device)
-            output = net(data, reverse_data, pad_start_index, max_length)
-            pred = output.argmax(dim=1, keepdim=True)
             targets = targets.to(device)
             targets = targets.view(-1)
             ts_loss = criterion(output, targets)
-            correct += pred.eq(targets.view_as(pred)).sum().item()
-            ts_acc = correct / len(targets)
+            selected_targets = torch.masked_select(targets, masks)
+            correct += selected_pred.eq(selected_targets.view_as(selected_pred)).sum().item()
+            ts_acc = correct / len(selected_targets)
             return ts_loss, ts_acc
         else:
-            outputs = None
-            for i in range(len(test_x)):
-                data = test_x[i].to(device)
-                data = data.unsqueeze(0)
-                reverse_data = reverse_test_x[i].to(device)
-                reverse_data = reverse_data.unsqueeze(0)
-                output = net(data, reverse_data, [pad_start_index[i]], max_length)
-                output = output[:pad_start_index[i]]
-                if outputs == None:
-                    outputs = output
-                else:
-                    outputs = torch.cat((outputs, output), dim=0)
-            pred = outputs.argmax(dim=1, keepdim=True)
-            return pred
+
+            print('seleced_pred:', selected_pred[:20])
+            return selected_pred
 
 
 
@@ -368,6 +371,7 @@ if __name__ == '__main__':
             for epoch in range(args.epochs):
                 tr_loss, tr_acc = pos_train(train_x, reverse_train_x, tr_x_pad_start_index, train_max_length, train_y, epoch)
                 ts_loss, ts_acc = pos_test(train_x, reverse_train_x, tr_x_pad_start_index, train_max_length, train_y)
+                _ = pos_test(train_x, reverse_train_x, tr_x_pad_start_index, train_max_length)
                 print("loss: {:.4f}, acc: {:.4f} ts_loss: {:.4f}, ts_acc: {:.4f}".format(tr_loss, tr_acc, ts_loss, ts_acc))
                 if ts_acc > best_dev_acc[0]:
                     if hasattr(net, "module"):
@@ -375,7 +379,9 @@ if __name__ == '__main__':
                     else:
                         best_weights[0] = {k: v.to("cpu").clone() for k, v in net.state_dict().items()}
                     best_dev_acc[0] = ts_acc
-            torch.save(best_weights[0], "pytorch_pos_masked_model.bin")
+            torch.save(best_weights[0], "pytorch_pos_model.bin")
+            pred_y = pos_test(test_x, reverse_test_x, ts_x_pad_start_index, test_max_length)
+            output2csv(pred_y, 'pos_class_dropout.pred.csv')
         else:
             print('do evaluation')
             net.load_state_dict(torch.load('pytorch_pos_model.bin', map_location="cpu"))
