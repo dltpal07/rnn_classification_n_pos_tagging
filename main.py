@@ -18,7 +18,7 @@ args = parser.parse_args()
 device = torch.device(f'cuda:{args.gpu_num}')
 
 criterion = nn.CrossEntropyLoss()
-isDebug = True
+isDebug = False
 
 
 def tokenization(sents):
@@ -213,10 +213,10 @@ def pos_test(test_x, reverse_test_x, pad_start_index, max_length, targets=None):
             mask[p:] = False
             masks.append(mask)
         masks = torch.stack(masks, dim=0)
-        print(masks[0])
+        if isDebug: print(masks[0])
         masks = masks.view(-1)
         pred = output.argmax(dim=1)
-        print('pred:', pred[:30])
+        if isDebug: print('pred:', pred[:30])
         selected_pred = torch.masked_select(pred, masks)
         if targets != None:
             targets = targets.to(device)
@@ -227,8 +227,7 @@ def pos_test(test_x, reverse_test_x, pad_start_index, max_length, targets=None):
             ts_acc = correct / len(selected_targets)
             return ts_loss, ts_acc
         else:
-
-            print('seleced_pred:', selected_pred[:20])
+            if isDebug: print('seleced_pred:', selected_pred[:20])
             return selected_pred
 
 
@@ -386,6 +385,6 @@ if __name__ == '__main__':
             print('do evaluation')
             net.load_state_dict(torch.load('pytorch_pos_model.bin', map_location="cpu"))
             net.to(device)
-            print(test_x.shape, reverse_test_x.shape, len(ts_x_pad_start_index))
+            if isDebug: print(test_x.shape, reverse_test_x.shape, len(ts_x_pad_start_index))
             pred_y = pos_test(test_x, reverse_test_x, ts_x_pad_start_index, test_max_length)
             output2csv(pred_y, 'pos_class.pred.csv')
