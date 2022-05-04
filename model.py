@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 
+
 class RNN(nn.Module):
     def __init__(self, args, num_classes):
         super(RNN, self).__init__()
@@ -11,17 +12,18 @@ class RNN(nn.Module):
 
         self.hidden_size = 512
 
-        self.wx0 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh0 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b0 = nn.Parameter(torch.zeros(self.hidden_size))
+        self.layer_norm0 = torch.nn.LayerNorm(self.hidden_size)
+        self.layer_norm1 = torch.nn.LayerNorm(self.hidden_size)
+        self.layer_norm2 = torch.nn.LayerNorm(self.hidden_size)
 
-        self.wx1 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh1 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b1 = nn.Parameter(torch.zeros(self.hidden_size))
+        self.wx0 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh0 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
 
-        self.wx2 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh2 = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b2 = nn.Parameter(torch.zeros(self.hidden_size))
+        self.wx1 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh1 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+
+        self.wx2 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh2 = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
 
 
         self.tanh = nn.Tanh()
@@ -37,17 +39,12 @@ class RNN(nn.Module):
         for i in range(20):
             v_t = x[:,i,:]
             v_t = torch.squeeze(v_t, 1)
-            h_t_0 = self.tanh(torch.matmul(v_t, self.wx0) + torch.matmul(h_t_0, self.wh0) + self.b0)
-            h_t_1 = self.tanh(torch.matmul(h_t_0, self.wx1) + torch.matmul(h_t_1, self.wh1) + self.b1)
-            h_t_2 = self.tanh(torch.matmul(h_t_1, self.wx2) + torch.matmul(h_t_2, self.wh2) + self.b2)
+            h_t_0 = self.tanh(self.layer_norm0(self.wx0(v_t) + self.wh0(h_t_0)))
+            h_t_1 = self.tanh(self.layer_norm1(self.wx1(h_t_0) + self.wh1(h_t_1)))
+            h_t_2 = self.tanh(self.layer_norm2(self.wx2(h_t_1) + self.wh2(h_t_2)))
 
         logit = self.fc(h_t_2)
         return logit
-
-    def make_layer(self, in_features, out_features):
-        linear = nn.Parameter(torch.Tensor(in_features, out_features))
-        nn.init.xavier_uniform_(linear)
-        return linear
 
 
 class BidirectionalRNN(nn.Module):
@@ -62,32 +59,27 @@ class BidirectionalRNN(nn.Module):
         self.layer_norm1 = torch.nn.LayerNorm(self.hidden_size)
         self.layer_norm2 = torch.nn.LayerNorm(self.hidden_size)
 
-        self.drop_out = nn.Dropout2d()
-
-        self.wx0_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh0_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b0_l2r = nn.Parameter(torch.zeros(self.hidden_size))
-
-        self.wx1_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh1_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b1_l2r = nn.Parameter(torch.zeros(self.hidden_size))
-
-        self.wx2_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh2_l2r = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b2_l2r = nn.Parameter(torch.zeros(self.hidden_size))
+        self.drop_out = nn.Dropout2d(p=0.2)
 
 
-        self.wx0_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh0_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b0_r2l = nn.Parameter(torch.zeros(self.hidden_size))
+        self.wx0_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh0_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
 
-        self.wx1_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh1_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b1_r2l = nn.Parameter(torch.zeros(self.hidden_size))
+        self.wx1_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh1_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
 
-        self.wx2_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.wh2_r2l = self.make_layer(self.hidden_size, self.hidden_size)
-        self.b2_r2l = nn.Parameter(torch.zeros(self.hidden_size))
+        self.wx2_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh2_l2r = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+
+
+        self.wx0_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh0_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+
+        self.wx1_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh1_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+
+        self.wx2_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
+        self.wh2_r2l = nn.Linear(self.hidden_size, self.hidden_size, bias=True)
 
         self.tanh = nn.Tanh()
         self.fc = nn.Sequential(
@@ -111,9 +103,9 @@ class BidirectionalRNN(nn.Module):
         for i in range(max_length):
             v_t_l2r = x_l2r[:,i,:]
             v_t_l2r = torch.squeeze(v_t_l2r, 1)
-            h_t_0_l2r = self.drop_out(self.tanh(self.layer_norm0(torch.matmul(v_t_l2r, self.wx0_l2r) + torch.matmul(h_t_0_l2r, self.wh0_l2r) + self.b0_l2r)))
-            h_t_1_l2r = self.drop_out(self.tanh(self.layer_norm1(torch.matmul(h_t_0_l2r, self.wx1_l2r) + torch.matmul(h_t_1_l2r, self.wh1_l2r) + self.b1_l2r)))
-            h_t_2_l2r = self.drop_out(self.tanh(self.layer_norm2(torch.matmul(h_t_1_l2r, self.wx2_l2r) + torch.matmul(h_t_2_l2r, self.wh2_l2r) + self.b2_l2r)))
+            h_t_0_l2r = self.drop_out(self.tanh(self.layer_norm0(self.wx0_l2r(v_t_l2r) + self.wh0_l2r(h_t_0_l2r))))
+            h_t_1_l2r = self.drop_out(self.tanh(self.layer_norm1(self.wx1_l2r(h_t_0_l2r) + self.wh1_l2r(h_t_1_l2r))))
+            h_t_2_l2r = self.drop_out(self.tanh(self.layer_norm2(self.wx2_l2r(h_t_1_l2r) + self.wh2_l2r(h_t_2_l2r))))
             unsqueeze_h_t_2_l2r = torch.unsqueeze(h_t_2_l2r, 1)
             if len(out_l2r) == 0:
                 out_l2r = unsqueeze_h_t_2_l2r
@@ -124,11 +116,11 @@ class BidirectionalRNN(nn.Module):
             v_t_r2l = x_r2l[:, i, :]
             v_t_r2l = torch.squeeze(v_t_r2l, 1)
             h_t_0_r2l = self.drop_out(self.tanh(
-                self.layer_norm0(torch.matmul(v_t_r2l, self.wx0_r2l) + torch.matmul(h_t_0_r2l, self.wh0_r2l) + self.b0_r2l)))
+                self.layer_norm0(self.wx0_r2l(v_t_r2l) + self.wh0_r2l(h_t_0_r2l))))
             h_t_1_r2l = self.drop_out(self.tanh(
-                self.layer_norm1(torch.matmul(h_t_0_r2l, self.wx1_r2l) + torch.matmul(h_t_1_r2l, self.wh1_r2l) + self.b1_r2l)))
+                self.layer_norm1(self.wx1_r2l(h_t_0_r2l) + self.wh1_r2l(h_t_1_r2l))))
             h_t_2_r2l = self.drop_out(self.tanh(
-                self.layer_norm2(torch.matmul(h_t_1_r2l, self.wx2_r2l) + torch.matmul(h_t_2_r2l, self.wh2_r2l) + self.b2_r2l)))
+                self.layer_norm2(self.wx2_r2l(h_t_1_r2l) + self.wh2_r2l(h_t_2_r2l))))
             unsqueeze_h_t_2_r2l = torch.unsqueeze(h_t_2_r2l, 1)
             if len(out_r2l) == 0:
                 out_r2l = unsqueeze_h_t_2_r2l
@@ -139,11 +131,6 @@ class BidirectionalRNN(nn.Module):
         logit = logit.view(-1, logit.size()[-1])
         return logit
 
-
-    def make_layer(self, in_features, out_features):
-        linear = nn.Parameter(torch.Tensor(in_features, out_features))
-        nn.init.xavier_uniform_(linear)
-        return linear
 
     def ordered_concat(self, l2r, r2l, pad_start_index):
         concat_vectors = []
@@ -161,4 +148,3 @@ class BidirectionalRNN(nn.Module):
         concat_vectors = torch.stack(concat_vectors, dim=0)
 
         return concat_vectors
-

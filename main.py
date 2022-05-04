@@ -10,7 +10,7 @@ import os
 import csv
 import torch.nn.functional as F
 parser = argparse.ArgumentParser()
-parser.add_argument('--gpu-num', default=3, type=int)
+parser.add_argument('--gpu-num', default=0, type=int)
 parser.add_argument('--task', default='classification', type=str, choices=['classification', 'pos'])
 parser.add_argument('--epochs', default=150, type=int)
 parser.add_argument('--do-train', action='store_true', default=False)
@@ -88,8 +88,6 @@ def output2csv(pred_y, file_name='classification_class.pred.csv'):
         writer.writerow(['id', 'label'])
         for i, p in enumerate(pred_y):
             y_id = str(i)
-            # if len(y_id) < 3:
-            #     y_id = '0' * (3 - len(y_id)) + y_id
             writer.writerow(['S' + y_id, p.item()])
     print('file saved.')
 
@@ -100,7 +98,7 @@ def classification_train(train_x, train_y, epoch):
     correct = 0
     net.train()
 
-    optimizer = optim.Adam(net.parameters(), lr=1e-2, weight_decay=1e-4)
+    optimizer = optim.Adam(net.parameters(), lr=1e-4, weight_decay=5e-3)
     batch_size = 256
     iteration = (len(train_x) // batch_size) + 1
     cur_i = 0
@@ -290,6 +288,8 @@ if __name__ == '__main__':
                         best_weights[0] = {k: v.to("cpu").clone() for k, v in net.state_dict().items()}
                     best_dev_acc[0] = ts_acc
             torch.save(best_weights[0], "pytorch_classification_model.bin")
+            pred_y = classification_test(test_x)
+            output2csv(pred_y)
         else:
             print('do evaluation')
             net.load_state_dict(torch.load('pytorch_classification_model.bin', map_location="cpu"))
@@ -378,13 +378,13 @@ if __name__ == '__main__':
                     else:
                         best_weights[0] = {k: v.to("cpu").clone() for k, v in net.state_dict().items()}
                     best_dev_acc[0] = ts_acc
-            torch.save(best_weights[0], "pytorch_pos_model.bin")
+            torch.save(best_weights[0], "pytorch_pos_dropout_p04_model.bin")
             pred_y = pos_test(test_x, reverse_test_x, ts_x_pad_start_index, test_max_length)
-            output2csv(pred_y, 'pos_class_dropout.pred.csv')
+            output2csv(pred_y, 'pos_class_dropout_p04.pred.csv')
         else:
             print('do evaluation')
-            net.load_state_dict(torch.load('pytorch_pos_model.bin', map_location="cpu"))
+            net.load_state_dict(torch.load('pytorch_pos_best_model.bin', map_location="cpu"))
             net.to(device)
             if isDebug: print(test_x.shape, reverse_test_x.shape, len(ts_x_pad_start_index))
             pred_y = pos_test(test_x, reverse_test_x, ts_x_pad_start_index, test_max_length)
-            output2csv(pred_y, 'pos_class.pred.csv')
+            output2csv(pred_y, 'pos_class_best_2.pred.csv')
