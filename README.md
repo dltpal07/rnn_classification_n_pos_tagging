@@ -8,6 +8,12 @@
 3 layer RNN model
 
 ## train the model
+- sentence clasification
 ~~~
-python main.py
+python main.py --do-train --task clasification
+~~~
+
+- pos tagging
+~~~
+python main.py --do-train --task pos
 ~~~
